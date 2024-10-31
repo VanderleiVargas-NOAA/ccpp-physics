@@ -28,9 +28,8 @@
       logical, intent(in) :: flag_for_dcnv_generic_tend
 
       real(kind=kind_phys), intent(in) :: frain, dtf
-      real(kind=kind_phys), dimension(:),     intent(in) :: rain1, cld1d
-      real(kind=kind_phys), dimension(:,:),   intent(in) :: gu0, gv0
-      real(kind=kind_phys), dimension(:,:),   intent(inout) :: gq0, gt0
+      real(kind=kind_phys), dimension(:),     intent(in) :: rain1, cld1d      
+      real(kind=kind_phys), dimension(:,:),   intent(inout) :: gq0, gt0, gu0, gv0
       real(kind=kind_phys), dimension(:,:,:), intent(in) :: gqtr0, save_qtr
       real(kind=kind_phys), dimension(:,:),   intent(in) :: dd_mf, dt_mf
       real(kind=kind_phys), dimension(:,:),   intent(in), optional :: ud_mf
@@ -58,8 +57,13 @@
 
       integer :: i, k, n, idtend, tracers
 
-      real(kind=kind_phys), intent(in) :: dT_dt(:,:), dU_dt(:,:), dV_dt(:,:), dq_dt(:,:)
+      real(kind=kind_phys), intent(inout) :: dT_dt(:,:), dU_dt(:,:), dV_dt(:,:), dq_dt(:,:)
       real(kind=kind_phys), intent(in) ::  delt
+
+      gt0 = gt0 + dT_dt * delt
+      gq0 = gq0 + dq_dt * delt
+      gv0 = gv0 + dV_dt * delt
+      gu0 = gu0 + dU_dt * delt
 
       ! Initialize CCPP error handling variables
       errmsg = ''
@@ -95,12 +99,10 @@
         enddo
 
         if (ldiag3d .and. flag_for_dcnv_generic_tend) then
-          gq0 = gq0 + dq_dt * delt * frain
 
           idtend=dtidx(index_of_temperature,index_of_process_dcnv)
           if(idtend>=1) then
             dtend(:,:,idtend) = dtend(:,:,idtend) + (dT_dt*delt)*frain
-            gt0 = gt0 + dT_dt * delt * frain 
           endif
 
           idtend=dtidx(index_of_x_wind,index_of_process_dcnv)
@@ -155,6 +157,11 @@
         endif ! if (ldiag3d)
 
       endif ! if (lssav)
+
+      dT_dt = 0._kind_phys
+      dU_dt = 0._kind_phys
+      dV_dt = 0._kind_phys
+      dq_dt = 0._kind_phys
 
     end subroutine GFS_DCNV_generic_post_run
     end module GFS_DCNV_generic_post

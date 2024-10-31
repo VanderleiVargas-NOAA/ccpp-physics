@@ -105,7 +105,7 @@
   dimensions = (horizontal_loop_extent,vertical_layer_dimension)
   type = real
   kind = kind_phys
-  intent = in
+  intent = inout
 [dU_dt]
   standard_name = instantaneous_tendency_of_x_wind_of_state
   long_name = instantaneous tendency of x wind of state
@@ -113,7 +113,7 @@
   dimensions = (horizontal_loop_extent,vertical_layer_dimension)
   type = real
   kind = kind_phys
-  intent = in
+  intent = inout
 [dV_dt]
   standard_name = instantaneous_tendency_of_y_wind_of_state
   long_name = instantaneous tendency of y wind of state
@@ -121,7 +121,7 @@
   dimensions = (horizontal_loop_extent,vertical_layer_dimension)
   type = real
   kind = kind_phys
-  intent = in
+  intent = inout
 [dq_dt]
   standard_name = instantaneous_tendency_of_specific_humidity
   long_name = instantaneous tendency of specific humidity
@@ -129,7 +129,7 @@
   dimensions = (horizontal_loop_extent,vertical_layer_dimension)
   type = real
   kind = kind_phys
-  intent = in
+  intent = inout
 [save_qtr]
   standard_name = tracer_concentration_save
   long_name = tracer concentration before entering a physics scheme

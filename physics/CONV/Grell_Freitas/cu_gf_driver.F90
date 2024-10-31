@@ -60,6 +60,7 @@ contains
                cactiv,cactiv_m,g,cp,xlv,r_v,forcet,forceqv_spechum,phil,raincv, &
                qv_spechum,t,cld1d,us,vs,t2di,w,qv2di_spechum,p2di,psuri,        &
                hbot,htop,kcnv,xland,hfx2,qfx2,aod_gf,cliw,clcw,                 &
+               dT_dt, dU_dt, dV_dt, dq_dt,                                      &
                pbl,ud_mf,dd_mf,dt_mf,cnvw_moist,cnvc,imfshalcnv,                &
                flag_for_scnv_generic_tend,flag_for_dcnv_generic_tend,           &
                dtend,dtidx,ntqv,ntiw,ntcw,index_of_temperature,index_of_x_wind, &
@@ -110,7 +111,7 @@ contains
 !$acc declare copyin(dtidx)
    real(kind=kind_phys),  dimension( : , : ), intent(in    ), optional :: forcet,forceqv_spechum
    real(kind=kind_phys),  dimension( : , : ), intent(in    ) :: w,phil
-   real(kind=kind_phys),  dimension( : , : ), intent(inout ) :: t,us,vs
+   real(kind=kind_phys),  dimension( : , : ), intent(in    ) :: t,us,vs
    real(kind=kind_phys),  dimension( : , : ), intent(inout ), optional :: qci_conv
    real(kind=kind_phys),  dimension( : , : ), intent(out   ) :: cnvw_moist,cnvc
    real(kind=kind_phys),  dimension( : , : ), intent(inout ) :: cliw, clcw
@@ -145,7 +146,7 @@ contains
 !$acc declare copyout(ud_mf,dd_mf,dt_mf,raincv,cld1d)
    ! Specific humidity from FV3
    real(kind=kind_phys), dimension (:,:), intent(in) :: qv2di_spechum
-   real(kind=kind_phys), dimension (:,:), intent(inout) :: qv_spechum
+   real(kind=kind_phys), dimension (:,:), intent(in) :: qv_spechum
    real(kind=kind_phys), dimension (:), intent(inout), optional :: aod_gf
 !$acc declare copyin(qv2di_spechum) copy(qv_spechum,aod_gf)
    ! Local water vapor mixing ratios and cloud water mixing ratios
@@ -257,6 +258,24 @@ contains
   !parameter (tf=263.16, tcr=273.16, tcrf=1.0/(tcr-tf))
   !parameter (tf=233.16, tcr=263.16, tcrf=1.0/(tcr-tf))
   parameter (tf=258.16, tcr=273.16, tcrf=1.0/(tcr-tf)) ! as fim, HCB tuning
+
+  real(kind=kind_phys), intent(out) :: dT_dt(:,:), dU_dt(:,:),      &
+  & dV_dt(:,:), dq_dt(:,:)
+   
+   real(kind=kind_phys)             :: new_t1(im,km), new_u1(im,km), &
+  &  new_v1(im,km), new_q1(im,km)
+   
+   dT_dt = 0._kind_phys
+   dU_dt = 0._kind_phys
+   dV_dt = 0._kind_phys
+   dq_dt = 0._kind_phys
+
+   new_t1 = t 
+   new_u1 = us 
+   new_v1 = vs
+   new_q1 = qv_spechum
+
+
   ! initialize ccpp error handling variables
      errmsg = ''
      errflg = 0
@@ -927,11 +946,11 @@ contains
                cnvw(i,k)=cnvwt(i,k)*xmb(i)*dt+cnvwts(i,k)*xmbs(i)*dt+cnvwtm(i,k)*xmbm(i)*dt
                ud_mf(i,k)=cuten(i)*zu(i,k)*xmb(i)*dt
                dd_mf(i,k)=cuten(i)*zd(i,k)*edt(i)*xmb(i)*dt
-               t(i,k)=t(i,k)+dt*(cutens(i)*outts(i,k)+cutenm(i)*outtm(i,k)+outt(i,k)*cuten(i))
+               new_t1(i,k)=t(i,k)+dt*(cutens(i)*outts(i,k)+cutenm(i)*outtm(i,k)+outt(i,k)*cuten(i))
                qv(i,k)=max(1.e-16,qv(i,k)+dt*(cutens(i)*outqs(i,k)+cutenm(i)*outqm(i,k)+outq(i,k)*cuten(i)))
                gdc(i,k,7)=sqrt(us(i,k)**2 +vs(i,k)**2)
-               us(i,k)=us(i,k)+outu(i,k)*cuten(i)*dt +outum(i,k)*cutenm(i)*dt +outus(i,k)*cutens(i)*dt
-               vs(i,k)=vs(i,k)+outv(i,k)*cuten(i)*dt +outvm(i,k)*cutenm(i)*dt +outvs(i,k)*cutens(i)*dt
+               new_u1(i,k)=us(i,k)+outu(i,k)*cuten(i)*dt +outum(i,k)*cutenm(i)*dt +outus(i,k)*cutens(i)*dt
+               new_v1(i,k)=vs(i,k)+outv(i,k)*cuten(i)*dt +outvm(i,k)*cutenm(i)*dt +outvs(i,k)*cutens(i)*dt
 
                gdc(i,k,1)= max(0.,tun_rad_shall(i)*cupclws(i,k)*cutens(i))      ! my mod
                !gdc2(i,k,1)=max(0.,tun_rad_deep(i)*(cupclwm(i,k)*cutenm(i)+cupclw(i,k)*cuten(i)))
@@ -941,7 +960,7 @@ contains
                gdc(i,k,2)=(outt(i,k))*86400.
                gdc(i,k,3)=(outtm(i,k))*86400.
                gdc(i,k,4)=(outts(i,k))*86400.
-               gdc(i,k,7)=-(gdc(i,k,7)-sqrt(us(i,k)**2 +vs(i,k)**2))/dt
+               gdc(i,k,7)=-(gdc(i,k,7)-sqrt(new_u1(i,k)**2 +new_v1(i,k)**2))/dt
               !gdc(i,k,8)=(outq(i,k))*86400.*xlv/cp
                gdc(i,k,8)=(outqm(i,k)+outqs(i,k)+outq(i,k))*86400.*xlv/cp
                gdc(i,k,9)=gdc(i,k,2)+gdc(i,k,3)+gdc(i,k,4)
@@ -974,7 +993,7 @@ contains
                       +outqcm(i,k)*cutenm(i)                           &
                       +clw_ten(i,k)                                    &
                          )
-               tem1 = max(0.0, min(1.0, (tcr-t(i,k))*tcrf))
+               tem1 = max(0.0, min(1.0, (tcr-new_t1(i,k))*tcrf))
                if (clcw(i,k) .gt. -999.0) then
                 cliw(i,k) = max(0.,cliw(i,k) + tem * tem1)            ! ice
                 clcw(i,k) = max(0.,clcw(i,k) + tem *(1.0-tem1))       ! water
@@ -1047,7 +1066,7 @@ contains
 ! Scale dry mixing ratios for water wapor and cloud water to specific humidy / moist mixing ratios
 !
 !$acc kernels
-        qv_spechum = qv/(1.0_kind_phys+qv)
+        new_q1 = qv/(1.0_kind_phys+qv)
         cnvw_moist = cnvw/(1.0_kind_phys+qv)
 !$acc end kernels
 !
@@ -1138,7 +1157,7 @@ contains
                 tem_shal = dt*(outqcs(i,k)*cutens(i)+outqcm(i,k)*cutenm(i))
                 tem_deep = dt*(outqc(i,k)*cuten(i)+clw_ten(i,k))
                 tem  = tem_shal+tem_deep
-                tem1 = max(0.0, min(1.0, (tcr-t(i,k))*tcrf))
+                tem1 = max(0.0, min(1.0, (tcr-new_t1(i,k))*tcrf))
                 weight_sum = abs(tem_shal)+abs(tem_deep)
                 if(weight_sum<1e-12) then
                   cycle
@@ -1168,6 +1187,13 @@ contains
 !$acc end parallel
           endif
         endif
+
+
+        dT_dt = (new_t1 - t)/dt 
+        dU_dt = (new_u1 - us)/dt 
+        dV_dt = (new_v1 - vs)/dt 
+        dq_dt = (new_q1 - qv_spechum)/dt 
+
    end subroutine cu_gf_driver_run
 !>@}
 end module cu_gf_driver

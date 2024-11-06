@@ -22,10 +22,10 @@
         im, levs, kdt, nrcm, nncl, ntcw, ntrac, imp_physics, imp_physics_gfdl, imp_physics_thompson, imp_physics_nssl,    &
         imp_physics_mg, imp_physics_fer_hires, cal_pre, cplflx, cplchm, cpllnd, progsigma, con_g, rhowater, rainmin, dtf, &
         frain, rainc, rain1, rann, xlat, xlon, gt0, gq0, prsl, prsi, phii, tsfc, ice, phil, htop, refl_10cm,              & 
-        imfshalcnv,imfshalcnv_gf,imfdeepcnv,imfdeepcnv_gf,imfdeepcnv_samf, con_t0c, snow, graupel, save_t, save_q,        &
+        imfshalcnv,imfshalcnv_gf,imfdeepcnv,imfdeepcnv_gf,imfdeepcnv_samf, con_t0c, snow, graupel, save_q,                &
         rain0, ice0, snow0, graupel0, del, rain, domr_diag, domzr_diag, domip_diag, doms_diag, tprcp, srflag, sr, cnvprcp,&
         totprcp, totice, totsnw, totgrp, cnvprcpb, totprcpb, toticeb, totsnwb, totgrpb, rain_cpl, rainc_cpl, snow_cpl,    &
-        pwat, frzr, frzrb, frozr, frozrb, tsnowp, tsnowpb, rhonewsn1, exticeden,                                          & 
+        pwat, frzr, frzrb, frozr, frozrb, tsnowp, tsnowpb, rhonewsn1, exticeden, gu0, gv0, dT_dt, dU_dt, dV_dt,           & 
         drain_cpl, dsnow_cpl, lsm, lsm_ruc, lsm_noahmp, raincprv, rainncprv, iceprv, snowprv,                             &
         graupelprv, draincprv, drainncprv, diceprv, dsnowprv, dgraupelprv, dtp,                                           &
         dtend, dtidx, index_of_temperature, index_of_process_mp,ldiag3d, qdiag3d,dqdt_qmicro, lssav, num_dfi_radar,       &
@@ -46,14 +46,14 @@
       real(kind=kind_phys),                    intent(in)    :: fh_dfi_radar(:), fhour, con_t0c
       real(kind=kind_phys),                    intent(in)    :: radar_tten_limits(:)
       integer,                                 intent(in)    :: ix_dfi_radar(:)
-      real(kind=kind_phys), dimension(:,:),    intent(inout) :: gt0,refl_10cm
+      real(kind=kind_phys), dimension(:,:),    intent(inout) :: gt0,gu0,gv0,refl_10cm
 
       real(kind=kind_phys),                    intent(in)    :: dtf, frain, con_g, rainmin, rhowater
       real(kind=kind_phys), dimension(:),      intent(in)    :: rain1, xlat, xlon, tsfc
       real(kind=kind_phys), dimension(:),      intent(inout) :: ice, snow, graupel, rainc
       real(kind=kind_phys), dimension(:),      intent(in), optional :: rain0, ice0, snow0, graupel0
       real(kind=kind_phys), dimension(:,:),    intent(in)    :: rann
-      real(kind=kind_phys), dimension(:,:),    intent(in)    :: prsl, save_t, del
+      real(kind=kind_phys), dimension(:,:),    intent(in)    :: prsl, del
       real(kind=kind_phys), dimension(:,:),    intent(in)    :: prsi, phii,phil
       real(kind=kind_phys), dimension(:,:,:),  intent(in)    :: gq0, save_q
 
@@ -123,6 +123,14 @@
       real(kind_phys) ze_mp, fctz, delz
       logical :: lfrz
 
+      real(kind=kind_phys), intent(inout), dimension(:,:) :: dT_dt, dU_dt, dV_dt
+      real(kind=kind_phys), dimension(im,levs) :: save_t
+
+      save_t = gt0
+
+      gt0 = gt0 + dT_dt * dtp
+      gv0 = gv0 + dV_dt * dtp
+      gu0 = gu0 + dU_dt * dtp
 
       ! Initialize CCPP error handling variables
       errmsg = ''
@@ -358,10 +366,10 @@
                     ttend = dfi_radar_tten(i,k,itime)
                     if (ttend>-19) then
                        if(idtend_radar>0) then
-                          dtend(i,k,idtend_radar) = dtend(i,k,idtend_radar) + (gt0(i,k)-save_t(i,k)) * frain
+                          dtend(i,k,idtend_radar) = dtend(i,k,idtend_radar) + (dT_dt(i,k)*dtp) * frain
                        endif
                     else if(idtend_mp>0) then
-                       dtend(i,k,idtend_mp) = dtend(i,k,idtend_mp) + (gt0(i,k)-save_t(i,k)) * frain
+                       dtend(i,k,idtend_mp) = dtend(i,k,idtend_mp) + (dT_dt(i,k)*dtp) * frain
                     endif
                  enddo
               enddo
@@ -473,7 +481,7 @@
            if(idtend>=1) then
               do k=1,levs
                  do i=1,im
-                    dtend(i,k,idtend) = dtend(i,k,idtend) + (gt0(i,k)-save_t(i,k)) * frain
+                    dtend(i,k,idtend) = dtend(i,k,idtend) + (dT_dt(i,k)*dtp) * frain
                  enddo
               enddo
            endif
@@ -543,6 +551,10 @@
             enddo
          enddo
       endif
+
+      dT_dt = 0._kind_phys
+      dU_dt = 0._kind_phys
+      dV_dt = 0._kind_phys
 
       end subroutine GFS_MP_generic_post_run
 !> @}

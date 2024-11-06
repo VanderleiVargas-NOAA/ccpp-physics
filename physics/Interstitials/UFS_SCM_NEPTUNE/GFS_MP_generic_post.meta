@@ -221,7 +221,7 @@
   dimensions = (horizontal_loop_extent,vertical_layer_dimension)
   type = real
   kind = kind_phys
-  intent = inout
+  intent = in
 [gu0]
   standard_name = x_wind_of_new_state
   long_name = zonal wind updated by physics
@@ -229,7 +229,7 @@
   dimensions = (horizontal_loop_extent,vertical_layer_dimension)
   type = real
   kind = kind_phys
-  intent = inout
+  intent = in
 [gv0]
   standard_name = y_wind_of_new_state
   long_name = meridional wind updated by physics
@@ -237,7 +237,7 @@
   dimensions = (horizontal_loop_extent,vertical_layer_dimension)
   type = real
   kind = kind_phys
-  intent = inout
+  intent = in
 [gq0]
   standard_name = tracer_concentration_of_new_state
   long_name = tracer concentration updated by physics

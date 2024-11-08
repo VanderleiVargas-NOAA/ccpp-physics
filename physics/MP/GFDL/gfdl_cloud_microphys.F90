@@ -114,7 +114,7 @@ contains
    subroutine gfdl_cloud_microphys_run(                                            &
       levs, im, rainmin, con_g, con_fvirt, con_rd, con_eps, frland, garea, islmsk, &
       gq0, gq0_ntcw, gq0_ntrw, gq0_ntiw, gq0_ntsw, gq0_ntgl, gq0_ntclamt,          &
-      gt0, gu0, gv0, vvl, prsl, phii, del, dT_dt, dU_dt, dV_dt,                    &
+      gt0, gu0, gv0, vvl, prsl, phii, del, dT_dt, dU_dt, dV_dt, dq_dt,             &
       rain0, ice0, snow0, graupel0, prcp0, sr,                                     &
       dtp, hydrostatic, phys_hydrostatic, lradar, refl_10cm,                       &
       reset, effr_in, rew, rei, rer, res, reg,                                     &
@@ -137,7 +137,7 @@ contains
       real(kind=kind_phys), intent(in   ) :: con_g, con_fvirt, con_rd, con_eps, rainmin
       real(kind=kind_phys), intent(in   ), dimension(:)     :: frland, garea
       integer,              intent(in   ), dimension(:)     :: islmsk
-      real(kind=kind_phys), intent(inout), dimension(:,:)   :: gq0, gq0_ntcw, gq0_ntrw, gq0_ntiw, &
+      real(kind=kind_phys), intent(inout), dimension(:,:)   :: gq0_ntcw, gq0_ntrw, gq0_ntiw, &
                                                                gq0_ntsw, gq0_ntgl, gq0_ntclamt
       real(kind=kind_phys), intent(in   ), dimension(:,:)   :: vvl, prsl, del
       real(kind=kind_phys), intent(in   ), dimension(:,:)   :: phii
@@ -175,17 +175,19 @@ contains
       real(kind=kind_phys) :: onebg
       real(kind=kind_phys) :: tem
 
-      real(kind=kind_phys), intent(in), dimension(:,:)   :: gt0, gu0, gv0
-      real(kind=kind_phys), intent(out), dimension(:,:)  :: dT_dt, dU_dt, dV_dt
-      real(kind=kind_phys), dimension(im,levs)           :: new_t1, new_u1, new_v1
+      real(kind=kind_phys), intent(in), dimension(:,:)   :: gt0, gu0, gv0, gq0
+      real(kind=kind_phys), intent(out), dimension(:,:)  :: dT_dt, dU_dt, dV_dt, dq_dt
+      real(kind=kind_phys), dimension(im,levs)           :: new_t1, new_u1, new_v1, new_q1
 
       dT_dt = 0._kind_phys
       dU_dt = 0._kind_phys
       dV_dt = 0._kind_phys
+      dq_dt = 0._kind_phys
       
       new_t1 = gt0
       new_u1 = gu0
       new_v1 = gv0
+      new_q1 = gq0
       
 
       ! Initialize CCPP error handling variables
@@ -295,7 +297,7 @@ contains
       do k=1,levs
         kk = levs-k+1
         do i=1,im
-            gq0(i,k)         = qv1(i,kk) + qv_dt(i,kk) * dtp
+            new_q1(i,k)         = qv1(i,kk) + qv_dt(i,kk) * dtp
             gq0_ntcw(i,k)    = ql1(i,kk) + ql_dt(i,kk) * dtp
             gq0_ntrw(i,k)    = qr1(i,kk) + qr_dt(i,kk) * dtp
             gq0_ntiw(i,k)    = qi1(i,kk) + qi_dt(i,kk) * dtp
@@ -324,7 +326,7 @@ contains
          allocate(den(1:im,1:levs))
          do k=1,levs
             do i=1,im
-               den(i,k)=con_eps*prsl(i,k)/(con_rd*new_t1(i,k)*(gq0(i,k)+con_eps))
+               den(i,k)=con_eps*prsl(i,k)/(con_rd*new_t1(i,k)*(new_q1(i,k)+con_eps))
             enddo
          enddo
          call cloud_diagnosis (1, im, 1, levs, den(1:im,1:levs), &
@@ -341,6 +343,7 @@ contains
       dT_dt = (new_t1 - gt0)/dtp
       dU_dt = (new_u1 - gu0)/dtp
       dV_dt = (new_v1 - gv0)/dtp
+      dq_dt = (new_q1 - gq0)/dtp
 
    end subroutine gfdl_cloud_microphys_run
 

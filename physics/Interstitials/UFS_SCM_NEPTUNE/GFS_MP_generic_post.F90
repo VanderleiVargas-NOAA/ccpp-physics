@@ -21,15 +21,15 @@
       subroutine GFS_MP_generic_post_run(                                                                                 &
         im, levs, kdt, nrcm, nncl, ntcw, ntrac, imp_physics, imp_physics_gfdl, imp_physics_thompson, imp_physics_nssl,    &
         imp_physics_mg, imp_physics_fer_hires, cal_pre, cplflx, cplchm, cpllnd, progsigma, con_g, rhowater, rainmin, dtf, &
-        frain, rainc, rain1, rann, xlat, xlon, gt0, gq0, prsl, prsi, phii, tsfc, ice, phil, htop, refl_10cm,              & 
-        imfshalcnv,imfshalcnv_gf,imfdeepcnv,imfdeepcnv_gf,imfdeepcnv_samf, con_t0c, snow, graupel, save_q,                &
+        frain, rainc, rain1, rann, xlat, xlon, gt0, gqtr0, gq0, prsl, prsi, phii, tsfc, ice, phil, htop, refl_10cm,       & 
+        imfshalcnv,imfshalcnv_gf,imfdeepcnv,imfdeepcnv_gf,imfdeepcnv_samf, con_t0c, snow, graupel, save_qtr,              &
         rain0, ice0, snow0, graupel0, del, rain, domr_diag, domzr_diag, domip_diag, doms_diag, tprcp, srflag, sr, cnvprcp,&
         totprcp, totice, totsnw, totgrp, cnvprcpb, totprcpb, toticeb, totsnwb, totgrpb, rain_cpl, rainc_cpl, snow_cpl,    &
-        pwat, frzr, frzrb, frozr, frozrb, tsnowp, tsnowpb, rhonewsn1, exticeden, gu0, gv0, dT_dt, dU_dt, dV_dt,           & 
+        pwat, frzr, frzrb, frozr, frozrb, tsnowp, tsnowpb, rhonewsn1, exticeden, gu0, gv0, dT_dt, dU_dt, dV_dt, dq_dt,    & 
         drain_cpl, dsnow_cpl, lsm, lsm_ruc, lsm_noahmp, raincprv, rainncprv, iceprv, snowprv,                             &
         graupelprv, draincprv, drainncprv, diceprv, dsnowprv, dgraupelprv, dtp,                                           &
         dtend, dtidx, index_of_temperature, index_of_process_mp,ldiag3d, qdiag3d,dqdt_qmicro, lssav, num_dfi_radar,       &
-        fh_dfi_radar,index_of_process_dfi_radar, ix_dfi_radar, dfi_radar_tten, radar_tten_limits, fhour, prevsq,      &
+        fh_dfi_radar,index_of_process_dfi_radar, ix_dfi_radar, dfi_radar_tten, radar_tten_limits, fhour, prevsq,          &
         iopt_lake, iopt_lake_clm, lkm, use_lake_model, errmsg, errflg)
 !
       use machine, only: kind_phys
@@ -46,7 +46,7 @@
       real(kind=kind_phys),                    intent(in)    :: fh_dfi_radar(:), fhour, con_t0c
       real(kind=kind_phys),                    intent(in)    :: radar_tten_limits(:)
       integer,                                 intent(in)    :: ix_dfi_radar(:)
-      real(kind=kind_phys), dimension(:,:),    intent(inout) :: gt0,gu0,gv0,refl_10cm
+      real(kind=kind_phys), dimension(:,:),    intent(inout) :: gt0,gu0,gv0,gq0,refl_10cm
 
       real(kind=kind_phys),                    intent(in)    :: dtf, frain, con_g, rainmin, rhowater
       real(kind=kind_phys), dimension(:),      intent(in)    :: rain1, xlat, xlon, tsfc
@@ -55,7 +55,7 @@
       real(kind=kind_phys), dimension(:,:),    intent(in)    :: rann
       real(kind=kind_phys), dimension(:,:),    intent(in)    :: prsl, del
       real(kind=kind_phys), dimension(:,:),    intent(in)    :: prsi, phii,phil
-      real(kind=kind_phys), dimension(:,:,:),  intent(in)    :: gq0, save_q
+      real(kind=kind_phys), dimension(:,:,:),  intent(in)    :: gqtr0, save_qtr
 
       real(kind=kind_phys), dimension(:,:,:),  intent(in), optional :: dfi_radar_tten
 
@@ -123,7 +123,7 @@
       real(kind_phys) ze_mp, fctz, delz
       logical :: lfrz
 
-      real(kind=kind_phys), intent(inout), dimension(:,:) :: dT_dt, dU_dt, dV_dt
+      real(kind=kind_phys), intent(inout), dimension(:,:) :: dT_dt, dU_dt, dV_dt, dq_dt
       real(kind=kind_phys), dimension(im,levs) :: save_t
 
       save_t = gt0
@@ -131,6 +131,7 @@
       gt0 = gt0 + dT_dt * dtp
       gv0 = gv0 + dV_dt * dtp
       gu0 = gu0 + dU_dt * dtp
+      gq0 = gq0 + dq_dt * dtp
 
       ! Initialize CCPP error handling variables
       errmsg = ''
@@ -307,7 +308,7 @@
 !
         call calpreciptype (kdt, nrcm, im, im, levs, levs+1, &
                             rann, xlat, xlon, gt0,           &
-                            gq0(:,:,1), prsl, prsi,          &
+                            gqtr0(:,:,1), prsl, prsi,          &
                             rain, phii, tsfc,                &  ! input
                             domr, domzr, domip, doms)           ! output
 !
@@ -491,7 +492,7 @@
                  if(idtend>=1) then
                     do k=1,levs
                        do i=1,im
-                          dtend(i,k,idtend) = dtend(i,k,idtend) + (gq0(i,k,itrac)-save_q(i,k,itrac)) * frain
+                          dtend(i,k,idtend) = dtend(i,k,idtend) + (gqtr0(i,k,itrac)-save_qtr(i,k,itrac)) * frain
                        enddo
                     enddo
                  endif
@@ -504,7 +505,7 @@
       if(progsigma)then
          do k=1,levs
             do i=1,im
-               dqdt_qmicro(i,k)=(gq0(i,k,1)-save_q(i,k,1))/dtp
+               dqdt_qmicro(i,k)=(gqtr0(i,k,1)-save_qtr(i,k,1))/dtp
             enddo
          enddo
       endif
@@ -532,12 +533,12 @@
         if (nncl > 0) then
           do ic = ntcw, ntcw+nncl-1
             do i=1,im
-              work1(i) = work1(i) + gq0(i,k,ic)
+              work1(i) = work1(i) + gqtr0(i,k,ic)
             enddo
           enddo
         endif
         do i=1,im
-          pwat(i) = pwat(i) + del(i,k)*(gq0(i,k,1)+work1(i))
+          pwat(i) = pwat(i) + del(i,k)*(gqtr0(i,k,1)+work1(i))
         enddo
       enddo
       do i=1,im
@@ -547,7 +548,7 @@
       if(progsigma)then      
          do k = 1, levs
             do i=1, im
-               prevsq(i,k) = gq0(i,k,1)
+               prevsq(i,k) = gqtr0(i,k,1)
             enddo
          enddo
       endif
@@ -555,6 +556,7 @@
       dT_dt = 0._kind_phys
       dU_dt = 0._kind_phys
       dV_dt = 0._kind_phys
+      dq_dt = 0._kind_phys
 
       end subroutine GFS_MP_generic_post_run
 !> @}

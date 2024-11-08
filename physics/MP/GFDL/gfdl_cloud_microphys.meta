@@ -198,7 +198,7 @@
   dimensions = (horizontal_loop_extent,vertical_layer_dimension)
   type = real
   kind = kind_phys
-  intent = inout
+  intent = in
 [gq0_ntcw]
   standard_name = cloud_liquid_water_mixing_ratio_of_new_state
   long_name = cloud condensed water mixing ratio updated by physics
@@ -275,6 +275,14 @@
   standard_name = instantaneous_tendency_of_y_wind_of_state
   long_name = instantaneous tendency of y wind of state
   units = m s-2
+  dimensions = (horizontal_loop_extent,vertical_layer_dimension)
+  type = real
+  kind = kind_phys
+  intent = out
+[dq_dt]
+  standard_name = instantaneous_tendency_of_specific_humidity
+  long_name = instantaneous tendency of specific humidity
+  units = kg kg-1 s-1
   dimensions = (horizontal_loop_extent,vertical_layer_dimension)
   type = real
   kind = kind_phys

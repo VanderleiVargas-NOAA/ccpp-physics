@@ -53,7 +53,7 @@
      &     eps,epsm1,fv,grav,hvap,rd,rv,                                &
      &     t0c,delt,ntk,ntr,delp,first_time_step,restart,               & 
      &     tmf,qmicro,progsigma,                                        &
-     &     prslp,psp,phil,qtr,prevsq,q,q1,t1,u1,v1, dT_dt, dU_dt,       &
+     &     prslp,psp,phil,clw,prevsq,q,q1,t1,u1,v1, dT_dt, dU_dt,       &
      &     dV_dt,dq_dt,fscav,rn,kbot,ktop,kcnv,islimsk,garea,           &
      &     dot,ncloud,hpbl,ud_mf,dt_mf,cnvw,cnvc,                       &
      &     clam,c0s,c1,evef,pgcon,asolfac,hwrf_samfshal,                & 
@@ -80,7 +80,7 @@
       real(kind=kind_phys), dimension(:), intent(in) :: fscav
       integer, intent(inout)  :: kcnv(:)
 
-      real(kind=kind_phys), intent(inout) ::   qtr(:,:,:)
+      real(kind=kind_phys), intent(inout) ::   clw(:,:,:)
 
       real(kind=kind_phys), intent(in) :: t1(:,:), u1(:,:), v1(:,:),    &
      &  q1(:,:)
@@ -565,8 +565,8 @@ c
         do k = 1, km
           do i = 1, im
             if (cnvflg(i) .and. k <= kmax(i)) then
-              ctr(i,k,kk)  = qtr(i,k,n)
-              ctro(i,k,kk) = qtr(i,k,n)
+              ctr(i,k,kk)  = clw(i,k,n)
+              ctro(i,k,kk) = clw(i,k,n)
               ecko(i,k,kk) = 0.
               ercko(i,k,kk) = 0.
             endif
@@ -898,7 +898,7 @@ c
             if(cnvflg(i)) then
               if(k >= kb(i) .and. k < kbcon(i)) then
                 dz = zo(i,k+1) - zo(i,k)
-                tem = 0.5 * (qtr(i,k,ntk)+qtr(i,k+1,ntk))
+                tem = 0.5 * (clw(i,k,ntk)+clw(i,k+1,ntk))
                 tkemean(i) = tkemean(i) + tem * dz
                 sumx(i) = sumx(i) + dz
               endif
@@ -2060,7 +2060,7 @@ c
 !    &  cnvflg, kb, kmax, ktcon, fscav,
 !!   &  edto, xlamd, xmb, c0t, eta, etad, zi, xlamue, xlamud, delp,
 !    &  xmb, c0t, eta, zi, xlamue, xlamud, delp,
-!    &  qtr, qaero)
+!    &  clw, qaero)
 !     endif
 !
 !> ## For the "feedback control", calculate updated values of the state variables by multiplying the cloud base mass flux and the tendencies calculated per unit cloud base mass flux from the static control.
@@ -2251,7 +2251,7 @@ c
         do i = 1, im
           if (cnvflg(i)) then
             if(k > kb(i) .and. k <= ktcon(i)) then
-              qtr(i,k,kk) = ctr(i,k,n)
+              clw(i,k,kk) = ctr(i,k,n)
             endif
           endif
         enddo
@@ -2282,15 +2282,15 @@ c
               if (cnvflg(i)) then
                 if(k > kb(i) .and. k < ktcon(i)) then
                   dp = 1000. * del(i,k)
-                  if (qtr(i,k,kk) < 0.) then
+                  if (clw(i,k,kk) < 0.) then
 !   borrow negative mass from wet deposition
-                    tem = -qtr(i,k,kk)*dp
+                    tem = -clw(i,k,kk)*dp
                     if(wet_dep(i,k,n) >= tem) then
                       wet_dep(i,k,n) = wet_dep(i,k,n) - tem
-                      qtr(i,k,kk) = 0.
+                      clw(i,k,kk) = 0.
                     else
                       wet_dep(i,k,n) = 0.
-                      qtr(i,k,kk) = qtr(i,k,kk)+wet_dep(i,k,n)/dp
+                      clw(i,k,kk) = clw(i,k,kk)+wet_dep(i,k,n)/dp
                     endif
                   endif
                 endif
@@ -2460,11 +2460,11 @@ c
             if (k >= kbcon(i) .and. k <= ktcon(i)) then
               tem  = dellal(i,k) * xmb(i) * dt2
               tem1 = max(0.0, min(1.0, (tcr-new_t1(i,k))*tcrf))
-              if (qtr(i,k,2) > -999.0) then
-                qtr(i,k,1) = qtr(i,k,1) + tem * tem1            ! ice
-                qtr(i,k,2) = qtr(i,k,2) + tem *(1.0-tem1)       ! water
+              if (clw(i,k,2) > -999.0) then
+                clw(i,k,1) = clw(i,k,1) + tem * tem1            ! ice
+                clw(i,k,2) = clw(i,k,2) + tem *(1.0-tem1)       ! water
               else
-                qtr(i,k,1) = qtr(i,k,1) + tem
+                clw(i,k,1) = clw(i,k,1) + tem
               endif
             endif
           endif
@@ -2480,7 +2480,7 @@ c
 !         do k = 1, km
 !           do i = 1, im
 !             if(cnvflg(i) .and. rn(i) > 0.) then
-!               if (k <= kmax(i)) qtr(i,k,kk) = qaero(i,k,n)
+!               if (k <= kmax(i)) clw(i,k,kk) = qaero(i,k,n)
 !             endif
 !           enddo
 !         enddo
@@ -2527,7 +2527,7 @@ c
                 tem2 = max(sigmagfm(i), betaw)
               endif
               ptem = tem / (tem2 * tem1)
-              qtr(i,k,ntk)=qtr(i,k,ntk)+0.5*tem2*ptem*ptem
+              clw(i,k,ntk)=clw(i,k,ntk)+0.5*tem2*ptem*ptem
             endif
           endif
         enddo

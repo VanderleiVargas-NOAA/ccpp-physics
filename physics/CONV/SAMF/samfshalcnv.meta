@@ -274,7 +274,7 @@
   type = real
   kind = kind_phys
   intent = in
-[qtr]
+[clw]
   standard_name = convective_transportable_tracers
   long_name = array to contain cloud water and other convective trans. tracers
   units = kg kg-1

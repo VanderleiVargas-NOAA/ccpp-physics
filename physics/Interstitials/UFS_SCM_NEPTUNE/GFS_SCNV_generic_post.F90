@@ -9,9 +9,9 @@
 !! \htmlinclude GFS_SCNV_generic_post_run.html
 !!
       subroutine GFS_SCNV_generic_post_run (im, levs, nn, lssav, ldiag3d, qdiag3d, &
-        frain, gu0, gv0, gt0, gq0, gqtr0, dT_dt,dU_dt,dV_dt, dq_dt, delt,save_qtr, &
+        frain, gu0, gv0, gt0, gq0, gqtr0, dT_dt,dU_dt,dV_dt, dq_dt, dqtr_dt, delt, &
         clw, shcnvcw, rain1, npdf3d, num_p3d, ncnvcld3d, cnvc, cnvw, nsamftrac,    &
-        rainc, cnvprcp, cnvprcpb, cnvw_phy_f3d, cnvc_phy_f3d,                      &
+        rainc, cnvprcp, cnvprcpb, cnvw_phy_f3d, cnvc_phy_f3d, dclw_dt,             &
         dtend, dtidx, index_of_temperature, index_of_x_wind, index_of_y_wind,      &
         index_of_process_scnv, ntqv, flag_for_scnv_generic_tend,                   &
         ntcw,ntiw,ntclamt,ntrw,ntsw,ntrnc,ntsnc,ntgl,ntgnc,ntsigma,                &
@@ -27,14 +27,14 @@
       logical, intent(in) :: lssav, ldiag3d, qdiag3d, flag_for_scnv_generic_tend
       real(kind=kind_phys),                     intent(in) :: frain
       real(kind=kind_phys), dimension(:,:), intent(inout) :: gu0, gv0, gt0, gq0
-      real(kind=kind_phys), dimension(:,:,:),   intent(in) :: save_qtr, gqtr0
+      real(kind=kind_phys), dimension(:,:,:),   intent(inout) :: gqtr0
 
       ! dtend only allocated if ldiag3d == .true.
       real(kind=kind_phys), intent(inout), optional :: dtend(:,:,:)
       integer, intent(in) :: dtidx(:,:)
       real(kind=kind_phys), intent(in) ::  delt
       integer, intent(in) :: index_of_temperature, index_of_x_wind, index_of_y_wind, index_of_process_scnv
-      real(kind=kind_phys), dimension(:,:,:), intent(in) :: clw
+      real(kind=kind_phys), dimension(:,:,:), intent(inout) :: clw
 
       ! Post code for SAS/SAMF
       integer, intent(in) :: npdf3d, num_p3d, ncnvcld3d
@@ -56,12 +56,20 @@
       integer :: i, k, n, idtend, tracers
       real(kind=kind_phys) :: tem
 
-      real(kind=kind_phys), intent(in) :: dT_dt(:,:), dU_dt(:,:), dV_dt(:,:), dq_dt(:,:)
+      real(kind=kind_phys), intent(in) :: dT_dt(:,:), dU_dt(:,:), dV_dt(:,:), dq_dt(:,:), dclw_dt(:,:,:), dqtr_dt(:,:,:)
 
       gq0 = gq0 + dq_dt * delt * frain
       gt0 = gt0 + dT_dt * delt * frain
       gu0 = gu0 + dU_dt * delt * frain
       gv0 = gv0 + dV_dt * delt * frain
+
+      do n = 1, nn
+        clw(:,:,n) = clw(:,:,n) + dclw_dt(:,:,n) * delt * frain
+      end do
+
+      do n = 1, ntrac
+        gqtr0(:,:,n) = gqtr0(:,:,n) + dqtr_dt(:,:,n) * delt * frain
+      end do
 
       ! Initialize CCPP error handling variables
       errmsg = ''
@@ -114,7 +122,7 @@
                    tracers = tracers + 1
                    idtend = dtidx(100+n,index_of_process_scnv)
                    if(idtend>0) then
-                      dtend(:,:,idtend) = dtend(:,:,idtend) + clw(:,:,tracers)-save_qtr(:,:,n) * frain
+                      dtend(:,:,idtend) = dtend(:,:,idtend) + (dclw_dt(:,:,tracers) * delt) * frain
                    endif
                 endif
              enddo
@@ -122,13 +130,13 @@
             do n=2,ntrac
                idtend = dtidx(100+n,index_of_process_scnv)
                if(idtend>0) then
-                  dtend(:,:,idtend) = dtend(:,:,idtend) + (gqtr0(:,:,n)-save_qtr(:,:,n))*frain
+                  dtend(:,:,idtend) = dtend(:,:,idtend) + (dqtr_dt(:,:,n) * delt) * frain
                endif
             enddo
           endif
           idtend = dtidx(100+ntqv, index_of_process_scnv)
           if(idtend>=1) then
-             dtend(:,:,idtend) = dtend(:,:,idtend) + (gqtr0(:,:,ntqv) - save_qtr(:,:,ntqv)) * frain
+             dtend(:,:,idtend) = dtend(:,:,idtend) + (dqtr_dt(:,:,ntqv) * delt) * frain
           endif
         endif
       endif

@@ -50,11 +50,11 @@
 !!  -# For the "feedback control", calculate updated values of the state variables by multiplying the cloud base mass flux and the tendencies calculated per unit cloud base mass flux from the static control.
 !!  \section det_samfshalcnv GFS samfshalcnv Detailed Algorithm
       subroutine samfshalcnv_run(im,km,itc,ntc,cliq,cp,cvap,            &
-     &     eps,epsm1,fv,grav,hvap,rd,rv,                                &
+     &     eps,epsm1,fv,grav,hvap,rd,rv, ntrac, dqtr_dt,                &
      &     t0c,delt,ntk,ntr,delp,first_time_step,restart,               & 
-     &     tmf,qmicro,progsigma,                                        &
+     &     tmf,qmicro,progsigma,nn,                                     &
      &     prslp,psp,phil,clw,prevsq,q,q1,t1,u1,v1, dT_dt, dU_dt,       &
-     &     dV_dt,dq_dt,fscav,rn,kbot,ktop,kcnv,islimsk,garea,           &
+     &     dV_dt,dq_dt,dclw_dt,fscav,rn,kbot,ktop,kcnv,islimsk,garea,   &
      &     dot,ncloud,hpbl,ud_mf,dt_mf,cnvw,cnvc,                       &
      &     clam,c0s,c1,evef,pgcon,asolfac,hwrf_samfshal,                & 
      &     sigmain,sigmaout,betadcu,betamcu,betascu,errmsg,errflg)
@@ -64,7 +64,7 @@
 
       implicit none
 !
-      integer, intent(in)  :: im, km, itc, ntc, ntk, ntr, ncloud
+      integer, intent(in) :: im,km,itc,ntc,ntk, ntr,ncloud,nn,ntrac
       integer, intent(in)  :: islimsk(:)
       real(kind=kind_phys), intent(in) :: cliq, cp, cvap,               &
      &   eps, epsm1, fv, grav, hvap, rd, rv, t0c, betascu, betadcu,     &
@@ -80,15 +80,13 @@
       real(kind=kind_phys), dimension(:), intent(in) :: fscav
       integer, intent(inout)  :: kcnv(:)
 
-      real(kind=kind_phys), intent(inout) ::   clw(:,:,:)
-
       real(kind=kind_phys), intent(in) :: t1(:,:), u1(:,:), v1(:,:),    &
-     &  q1(:,:)
+     &  q1(:,:), clw(:,:,:)
       real(kind=kind_phys)             :: new_t1(im,km), new_u1(im,km), &
-     &  new_v1(im,km), new_q1(im,km)
+     &  new_v1(im,km), new_q1(im,km), new_clw(im,km,nn)
       
       real(kind=kind_phys), intent(out) :: dT_dt(:,:), dU_dt(:,:),      &
-     & dV_dt(:,:), dq_dt(:,:)
+     & dV_dt(:,:), dq_dt(:,:), dclw_dt(:,:,:), dqtr_dt(:,:,:)
 
 
 !
@@ -261,11 +259,14 @@ c  cloud water
       dU_dt = 0._kind_phys
       dV_dt = 0._kind_phys
       dq_dt = 0._kind_phys
+      dclw_dt = 0._kind_phys
+      dqtr_dt = 0._kind_phys
 
       new_t1 = t1
       new_u1 = u1
       new_v1 = v1
       new_q1 = q1
+      new_clw = clw
 
 
 c-----------------------------------------------------------------------
@@ -2251,7 +2252,7 @@ c
         do i = 1, im
           if (cnvflg(i)) then
             if(k > kb(i) .and. k <= ktcon(i)) then
-              clw(i,k,kk) = ctr(i,k,n)
+              new_clw(i,k,kk) = ctr(i,k,n)
             endif
           endif
         enddo
@@ -2282,15 +2283,15 @@ c
               if (cnvflg(i)) then
                 if(k > kb(i) .and. k < ktcon(i)) then
                   dp = 1000. * del(i,k)
-                  if (clw(i,k,kk) < 0.) then
+                  if (new_clw(i,k,kk) < 0.) then
 !   borrow negative mass from wet deposition
-                    tem = -clw(i,k,kk)*dp
+                    tem = -new_clw(i,k,kk)*dp
                     if(wet_dep(i,k,n) >= tem) then
                       wet_dep(i,k,n) = wet_dep(i,k,n) - tem
-                      clw(i,k,kk) = 0.
+                      new_clw(i,k,kk) = 0.
                     else
                       wet_dep(i,k,n) = 0.
-                      clw(i,k,kk) = clw(i,k,kk)+wet_dep(i,k,n)/dp
+                    new_clw(i,k,kk) = new_clw(i,k,kk)+wet_dep(i,k,n)/dp
                     endif
                   endif
                 endif
@@ -2460,11 +2461,11 @@ c
             if (k >= kbcon(i) .and. k <= ktcon(i)) then
               tem  = dellal(i,k) * xmb(i) * dt2
               tem1 = max(0.0, min(1.0, (tcr-new_t1(i,k))*tcrf))
-              if (clw(i,k,2) > -999.0) then
-                clw(i,k,1) = clw(i,k,1) + tem * tem1            ! ice
-                clw(i,k,2) = clw(i,k,2) + tem *(1.0-tem1)       ! water
+              if (new_clw(i,k,2) > -999.0) then
+                new_clw(i,k,1) = new_clw(i,k,1) + tem * tem1            ! ice
+                new_clw(i,k,2) = new_clw(i,k,2) + tem *(1.0-tem1)       ! water
               else
-                clw(i,k,1) = clw(i,k,1) + tem
+                new_clw(i,k,1) = new_clw(i,k,1) + tem
               endif
             endif
           endif
@@ -2527,7 +2528,7 @@ c
                 tem2 = max(sigmagfm(i), betaw)
               endif
               ptem = tem / (tem2 * tem1)
-              clw(i,k,ntk)=clw(i,k,ntk)+0.5*tem2*ptem*ptem
+              new_clw(i,k,ntk)=new_clw(i,k,ntk)+0.5*tem2*ptem*ptem
             endif
           endif
         enddo
@@ -2540,6 +2541,7 @@ c
       dU_dt = (new_u1 - u1)/delt
       dV_dt = (new_v1 - v1)/delt
       dq_dt = (new_q1 - q1)/delt
+      dclw_dt = (new_clw - clw)/delt
 
 
 !!

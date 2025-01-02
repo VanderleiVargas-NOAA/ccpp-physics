@@ -9,11 +9,11 @@
 !! \htmlinclude GFS_DCNV_generic_post_run.html
 !!
     subroutine GFS_DCNV_generic_post_run (im, levs, lssav, ldiag3d, qdiag3d, ras, &
-      cscnv, frain, rain1, dtf, cld1d, gu0, gv0, gt0,gq0,                         &
+      cscnv, frain, rain1, dtf, cld1d, gu0, gv0, gt0,gq0,dclw_dt, nn,             &
       ud_mf, dd_mf, dt_mf, con_g, npdf3d, num_p3d, ncnvcld3d, nsamftrac,          &
       rainc, cldwrk, upd_mf, dwn_mf, det_mf, dtend, dtidx, index_of_process_dcnv, &
-      index_of_temperature, index_of_x_wind, index_of_y_wind,ntqv,gqtr0,save_qtr, &
-      cnvw, cnvc, cnvw_phy_f3d, cnvc_phy_f3d, flag_for_dcnv_generic_tend,         &
+      index_of_temperature, index_of_x_wind, index_of_y_wind,ntqv,gqtr0,          &
+      cnvw, cnvc, cnvw_phy_f3d, cnvc_phy_f3d, flag_for_dcnv_generic_tend,dqtr_dt, &
       ntcw,ntiw,ntclamt,ntrw,ntsw,ntrnc,ntsnc,ntgl, dT_dt,dU_dt,dV_dt,dq_dt,delt, &
       ntgnc, nthl, nthnc, nthv, ntgv, ntrz, ntgz, nthz, ntsigma, ntrac,clw,       &
       satmedmf, trans_trac, errmsg, errflg)
@@ -23,15 +23,14 @@
 
       implicit none
 
-      integer, intent(in) :: im, levs, nsamftrac
+      integer, intent(in) :: im, levs, nsamftrac, nn, ntrac
       logical, intent(in) :: lssav, ldiag3d, qdiag3d, ras, cscnv
       logical, intent(in) :: flag_for_dcnv_generic_tend
 
       real(kind=kind_phys), intent(in) :: frain, dtf
-      real(kind=kind_phys), dimension(:),     intent(in) :: rain1, cld1d
-      real(kind=kind_phys), dimension(:,:),   intent(in) :: gu0, gv0
-      real(kind=kind_phys), dimension(:,:),   intent(inout) :: gq0, gt0
-      real(kind=kind_phys), dimension(:,:,:), intent(in) :: gqtr0, save_qtr
+      real(kind=kind_phys), dimension(:),     intent(in) :: rain1, cld1d      
+      real(kind=kind_phys), dimension(:,:),   intent(inout) :: gq0, gt0, gu0, gv0
+      real(kind=kind_phys), dimension(:,:,:), intent(inout) :: gqtr0
       real(kind=kind_phys), dimension(:,:),   intent(in) :: dd_mf, dt_mf
       real(kind=kind_phys), dimension(:,:),   intent(in), optional :: ud_mf
       real(kind=kind_phys), intent(in) :: con_g
@@ -47,8 +46,8 @@
            index_of_x_wind, index_of_y_wind, ntqv
       integer, intent(in) :: ntcw,ntiw,ntclamt,ntrw,ntsw,ntrnc,ntsnc,ntgl,     &
                              ntgnc, nthl, nthnc, nthv, ntgv, ntrz, ntgz, nthz, &
-                             ntsigma, ntrac
-      real(kind=kind_phys), dimension(:,:,:), intent(in) :: clw
+                             ntsigma
+      real(kind=kind_phys), dimension(:,:,:), intent(inout) :: clw
 
 
       real(kind=kind_phys), dimension(:,:), intent(inout), optional :: cnvw_phy_f3d, cnvc_phy_f3d
@@ -58,8 +57,21 @@
 
       integer :: i, k, n, idtend, tracers
 
-      real(kind=kind_phys), intent(in) :: dT_dt(:,:), dU_dt(:,:), dV_dt(:,:), dq_dt(:,:)
+      real(kind=kind_phys), intent(in) :: dT_dt(:,:), dU_dt(:,:), dV_dt(:,:), dq_dt(:,:), dclw_dt(:,:,:), dqtr_dt(:,:,:)
       real(kind=kind_phys), intent(in) ::  delt
+
+      gq0 = gq0 + dq_dt * delt * frain
+      gt0 = gt0 + dT_dt * delt * frain
+      gu0 = gu0 + dU_dt * delt * frain
+      gv0 = gv0 + dV_dt * delt * frain
+
+      do n = 1, nn
+        clw(:,:,n) = clw(:,:,n) + dclw_dt(:,:,n) * delt * frain
+      end do
+
+      do n = 1, ntrac
+        gqtr0(:,:,n) = gqtr0(:,:,n) + dqtr_dt(:,:,n) * delt * frain
+      end do
 
       ! Initialize CCPP error handling variables
       errmsg = ''
@@ -95,12 +107,10 @@
         enddo
 
         if (ldiag3d .and. flag_for_dcnv_generic_tend) then
-          gq0 = gq0 + dq_dt * delt * frain
 
           idtend=dtidx(index_of_temperature,index_of_process_dcnv)
           if(idtend>=1) then
             dtend(:,:,idtend) = dtend(:,:,idtend) + (dT_dt*delt)*frain
-            gt0 = gt0 + dT_dt * delt * frain 
           endif
 
           idtend=dtidx(index_of_x_wind,index_of_process_dcnv)
@@ -125,7 +135,7 @@
                    tracers = tracers + 1
                    idtend = dtidx(100+n,index_of_process_dcnv)
                    if(idtend>0) then
-                      dtend(:,:,idtend) = dtend(:,:,idtend) + clw(:,:,tracers)-save_qtr(:,:,n) * frain
+                      dtend(:,:,idtend) = dtend(:,:,idtend) + (dclw_dt(:,:,tracers) * delt) * frain
                    endif
                 endif
              enddo
@@ -133,13 +143,13 @@
             do n=2,ntrac
                idtend = dtidx(100+n,index_of_process_dcnv)
                if(idtend>0) then
-                  dtend(:,:,idtend) = dtend(:,:,idtend) + (gqtr0(:,:,n)-save_qtr(:,:,n))*frain
+                  dtend(:,:,idtend) = dtend(:,:,idtend) + (dqtr_dt(:,:,n) * delt )*frain
                endif
             enddo
           endif
           idtend = dtidx(100+ntqv, index_of_process_dcnv)
           if(idtend>=1) then
-             dtend(:,:,idtend) = dtend(:,:,idtend) + (gqtr0(:,:,ntqv) - save_qtr(:,:,ntqv)) * frain
+             dtend(:,:,idtend) = dtend(:,:,idtend) + (dqtr_dt(:,:,ntqv) * delt) * frain
           endif
 
           ! convective mass fluxes
